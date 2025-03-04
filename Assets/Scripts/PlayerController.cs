@@ -25,4 +25,18 @@ public class PlayerController : NetworkBehaviour
 		Vector3 movement = new Vector3(horizontal, 0f, vertical) * moveSpeed;
 		rb.AddForce(movement);
 	}
+
+	void OnCollisionStay(Collision collision)
+	{
+		if (!IsOwner) return;
+		if (collision.gameObject.CompareTag("PlayerBall"))
+		{
+			Rigidbody otherRb = collision.gameObject.GetComponent<Rigidbody>();
+			if (otherRb != null)
+			{
+				Vector3 pushDir = (collision.transform.position - transform.position).normalized;
+				otherRb.AddForce(pushDir * pushForce, ForceMode.Impulse);
+			}
+		}
+	}
 }
