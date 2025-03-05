@@ -3,40 +3,53 @@ using System.Collections.Generic;
 using UnityEngine;
 using Unity.Netcode;
 
+[RequireComponent(typeof(Rigidbody), typeof(NetworkObject))]
 public class PlayerController : NetworkBehaviour
 {
-	public float moveSpeed = 5f;
-	public float pushForce = 5f;
-
+	[Header("Movement Settings")]
+	public float speed = 5f;
 	private Rigidbody rb;
 
 	private void Awake()
 	{
 		rb = GetComponent<Rigidbody>();
+		rb.interpolation = RigidbodyInterpolation.Interpolate;
 	}
 
-	void Update()
+	private void FixedUpdate()
 	{
 		if (!IsOwner) return;
 
-		float horizontal = Input.GetAxis("Horizontal");
-		float vertical = Input.GetAxis("Vertical");
+		float moveX = Input.GetAxis("Horizontal");
+		float moveZ = Input.GetAxis("Vertical");
+		Vector3 moveDirection = new Vector3(moveX, 0, moveZ).normalized;
 
-		Vector3 movement = new Vector3(horizontal, 0f, vertical) * moveSpeed;
-		rb.AddForce(movement);
+		MoveServerRpc(moveDirection);
 	}
 
-	void OnCollisionStay(Collision collision)
+	[ServerRpc]
+	private void MoveServerRpc(Vector3 direction, ServerRpcParams rpcParams = default)
 	{
-		if (!IsOwner) return;
-		if (collision.gameObject.CompareTag("PlayerBall"))
+		ulong clientId = rpcParams.Receive.SenderClientId;
+
+		if (NetworkManager.Singleton.ConnectedClients.TryGetValue(clientId, out NetworkClient client))
 		{
-			Rigidbody otherRb = collision.gameObject.GetComponent<Rigidbody>();
-			if (otherRb != null)
+			Rigidbody playerRb = client.PlayerObject.GetComponent<Rigidbody>();
+
+			if (playerRb != null)
 			{
-				Vector3 pushDir = (collision.transform.position - transform.position).normalized;
-				otherRb.AddForce(pushDir * pushForce, ForceMode.Impulse);
+				playerRb.AddForce(direction * speed, ForceMode.Force);
+				UpdatePositionClientRpc(playerRb.position, playerRb.velocity);
 			}
+		}
+	}
+
+	[ClientRpc]
+	private void UpdatePositionClientRpc(Vector3 position, Vector3 velocity)
+	{
+		if (!IsOwner)
+		{
+			rb.velocity = velocity;
 		}
 	}
 }
